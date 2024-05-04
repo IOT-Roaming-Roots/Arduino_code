@@ -1,0 +1,157 @@
+// Add your PushingBox Scenario DeviceID here:
+char devid[] = "vF4313386DF3F704";
+char serverName[] = "api.pushingbox.com";
+boolean DEBUG = true;
+#include <Bridge.h>
+#include <HttpClient.h>
+#include <Wire.h>
+#include <rgb_lcd.h>
+
+rgb_lcd lcd;
+
+const int button = 8;
+const int moistureSensorPin = A0;
+const int lightSensorPin = A1;
+const int temperatureSensorPin = A2; // Assuming the temperature sensor is connected to analog pin A2
+const int relayPin = 4; // Assuming the relay is connected to digital pin 4
+
+int displayMode = 0; // Variable to keep track of the display mode
+unsigned long lastDataSentTime = 0;
+const unsigned long sendDataInterval = 600000; // Send data every 10 minutes
+//const unsigned long sendDataInterval = 10000; // Send data every 5 seconds
+
+void setup() {
+  // Bridge takes about two seconds to start up
+  // it can be helpful to use the on-board LED
+  // as an indicator for when it has initialized
+  pinMode(13, OUTPUT);
+  digitalWrite(13, LOW);
+  Bridge.begin();
+  digitalWrite(13, HIGH);
+
+  Serial.begin(9600);
+  while (!Serial); // wait for a serial connection
+
+  // Initialize the LCD
+  lcd.begin(16, 2);
+
+  // Set up relay pin as an output
+  pinMode(relayPin, OUTPUT);
+
+  // Set up serial communication
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Initialize the client library
+  HttpClient client;
+
+  // Read moisture sensor
+  int moistureSensorValue = analogRead(moistureSensorPin);
+  
+  // Convert moisture sensor analog value to percentage (adjust the mapping according to your sensor)
+  int moisturePercentage = map(moistureSensorValue, 0, 1023, 0, 100);
+  
+  // Read light sensor
+  int lightSensorValue = analogRead(lightSensorPin);
+  
+  // Convert light sensor analog value to percentage (adjust the mapping according to your sensor)
+  int lightPercentage = map(lightSensorValue, 0, 1023, 0, 100);
+  
+  // Read temperature sensor
+  int temperatureSensorValue = analogRead(temperatureSensorPin);
+  
+  // Convert temperature sensor analog value to Celsius (adjust the mapping according to your sensor)
+  float voltage = temperatureSensorValue * (1.1 / 1024.0); // Convert to voltage
+  float temperatureCelsius = (voltage - 0.35) * 100; // Convert to Celsius
+  
+  // Print moisture level, light level, and temperature to serial monitor
+  Serial.print("Moisture Level: ");
+  Serial.print(moisturePercentage);
+  Serial.println("%");
+  Serial.print("Light Level: ");
+  Serial.print(lightPercentage);
+  Serial.println("%");
+  Serial.print("Temperature: ");
+  Serial.print(temperatureCelsius);
+  Serial.println("°C");
+  
+  
+  
+  // Display one piece of information at a time on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+
+  switch (displayMode) {
+    case 0:
+      lcd.print("Moisture: ");
+      lcd.setCursor(0, 1);
+      lcd.print(moisturePercentage);
+      lcd.print("%");
+      break;
+    case 1:
+      lcd.print("Light: ");
+      lcd.setCursor(0, 1);
+      lcd.print(lightPercentage);
+      lcd.print("%");
+      break;
+    case 2:
+      lcd.print("Temperature: ");
+      lcd.setCursor(0, 1);
+      lcd.print(temperatureCelsius);
+      lcd.print("C");
+      break;
+  }
+
+  // Increment displayMode and loop back to 0 if it reaches 3
+  displayMode = (displayMode + 1) % 3;
+  
+  delay(2000); // Wait for 5 seconds before displaying the next piece of information
+
+
+
+  unsigned long currentMillis = millis();
+    Serial.println(currentMillis/1000);
+  if (currentMillis - lastDataSentTime >= sendDataInterval) {
+    // Make a HTTP request:
+    String APIRequest;
+    APIRequest = String(serverName) + "/pushingbox?devid=" + String(devid)+ "&IDtag="+moisturePercentage+"&TimeStamp="+lightPercentage+"&TempC="+temperatureCelsius;
+    client.get(APIRequest);
+    
+    // if there are incoming bytes available
+    // from the server, read them and print them:
+    while (client.available()) {
+      char c = client.read();
+  }
+
+    // Control relay based on moisture level
+  if (moisturePercentage < 20) {
+    digitalWrite(relayPin, HIGH); // Turn on relay
+    delay(10000); // Wait for 1 second
+    digitalWrite(relayPin, LOW); // Turn off relay
+    
+    }
+    Serial.flush();
+    Serial.println("Data sent to server.");
+    lastDataSentTime = currentMillis;
+  }
+
+  if (digitalRead(button) == HIGH) {
+    // Make a HTTP request:
+    String APIRequest;
+    APIRequest = String(serverName) + "/pushingbox?devid=" + String(devid)+ "&IDtag="+moisturePercentage+"&TimeStamp="+lightPercentage+"&TempC="+temperatureCelsius;
+    client.get(APIRequest);
+    
+    // if there are incoming bytes available
+    // from the server, read them and print them:
+    while (client.available()) {
+      char c = client.read();
+  }
+    digitalWrite(relayPin, HIGH); // Turn on relay
+    delay(10000); // Wait for 1 second
+    digitalWrite(relayPin, LOW); // Turn off relay
+    
+    Serial.flush();
+    Serial.println("Data sent to server.");
+  }
+}
